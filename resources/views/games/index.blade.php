@@ -110,10 +110,17 @@
                                             </div>
                                         </td>
                                         <td class="px-6 py-5 text-center">
-                                            <span class="px-2 py-1 rounded bg-slate-950 text-slate-400 text-[10px] uppercase font-black border border-slate-800">
-                                                {{ $game->rank ?? 'unranked' }}
-                                            </span>
-                                        </td>
+    <span class="px-2 py-1 rounded bg-slate-950 text-slate-400 text-[10px] uppercase font-black border border-slate-800">
+        {{ $game->rank ?? 'unranked' }}
+    </span>
+
+    @if($game->rank_goal)
+        <div class="mt-1 text-[10px] text-cyan-400 font-bold uppercase">
+            Target: {{ $game->rank_goal->target_rank }}
+        </div>
+    @endif
+</td>
+
                                         <td class="px-6 py-5 text-center font-mono text-slate-200 font-bold">
                                             {{ number_format(($game->total_minutes ?? 0) / 60, 1) }}
                                         </td>
@@ -132,19 +139,49 @@
                                             @endif
                                         </td>
                                         <td class="px-6 py-5 text-right text-[10px] font-black uppercase tracking-widest">
-                                            <div class="flex justify-end gap-4">
-                                                <a href="{{ route('games.edit', $game) }}"
-                                                   class="text-cyan-500 hover:text-cyan-400">Edit</a>
-                                                <form action="{{ route('games.destroy', $game) }}"
-                                                      method="POST" class="inline">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit"
-                                                            class="text-fuchsia-500 hover:text-fuchsia-400"
-                                                            onclick="return confirm('Delete game?')">
-                                                        Delete
-                                                    </button>
-                                                </form>
+                                            <div class="flex flex-col items-end gap-2">
+
+                                                {{-- Start / Stop + timer --}}
+                                                <div class="flex items-center gap-3">
+                                                    @if($game->activeSession)
+                                                        <form action="{{ route('games.sessions.stop', $game) }}" method="POST">
+                                                            @csrf
+                                                            <button type="submit"
+                                                                    class="px-3 py-1 rounded-full bg-red-600/20 text-red-400 border border-red-500/40 text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all">
+                                                                Stop session
+                                                            </button>
+                                                        </form>
+                                                        <span class="flex items-center gap-1 text-[10px] font-mono text-amber-300"
+                                                              data-started-at="{{ $game->activeSession->started_at->timestamp }}"
+                                                              data-game-id="{{ $game->id }}"
+                                                              id="live-timer-{{ $game->id }}">
+                                                            <span class="inline-block h-2 w-2 rounded-full bg-amber-400 animate-pulse"></span>
+                                                            <span class="timer-text">00:00:00</span>
+                                                        </span>
+                                                    @else
+                                                        <form action="{{ route('games.sessions.start', $game) }}" method="POST">
+                                                            @csrf
+                                                            <button type="submit"
+                                                                    class="px-3 py-1 rounded-full bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-black uppercase hover:bg-emerald-600 hover:text-white transition-all">
+                                                                Start session
+                                                            </button>
+                                                        </form>
+                                                    @endif
+                                                </div>
+
+                                                {{-- Postojeći Edit/Delete --}}
+                                                <div class="flex justify-end gap-4">
+                                                    <a href="{{ route('games.edit', $game) }}"
+                                                       class="text-cyan-500 hover:text-cyan-400">Edit</a>
+                                                    <form action="{{ route('games.destroy', $game) }}" method="POST" class="inline">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="text-fuchsia-500 hover:text-fuchsia-400"
+                                                                onclick="return confirm('Delete game?')">
+                                                            Delete
+                                                        </button>
+                                                    </form>
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>
@@ -180,6 +217,31 @@
                                             </form>
                                         </td>
                                     </tr>
+
+                                    {{-- GOAL PROGRESS (ako postoji cilj) --}}
+                                    @if($game->goal)
+                                        <tr class="bg-slate-950/40">
+                                            <td colspan="5" class="px-6 py-3 border-t border-slate-800/30">
+                                                <div class="flex items-center gap-3">
+                                                    <span class="text-[9px] font-black text-slate-600 uppercase tracking-[0.2em]">
+                                                        Goal:
+                                                    </span>
+                                                    <span class="text-[11px] text-slate-300">
+                                                        Play {{ number_format(($game->goal->target_minutes ?? 0) / 60, 1) }} h total
+                                                    </span>
+                                                </div>
+                                                <div class="mt-2 w-full h-2 rounded-full bg-slate-900 overflow-hidden">
+                                                    <div class="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500"
+                                                         style="width: {{ $game->goal_progress }}%;">
+                                                    </div>
+                                                </div>
+                                                <div class="mt-1 flex justify-between text-[10px] text-slate-500">
+                                                    <span>{{ number_format(($game->total_minutes ?? 0) / 60, 1) }} h so far</span>
+                                                    <span>{{ $game->goal_progress }} %</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    @endif
                                 @endforeach
                             </tbody>
                         </table>
@@ -247,6 +309,40 @@
 
     @vite('resources/js/app.js')
 
+    {{-- Live timer --}}
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const timerEls = document.querySelectorAll('[id^="live-timer-"]');
+        if (!timerEls.length) return;
+
+        function pad(n) {
+            return n.toString().padStart(2, '0');
+        }
+
+        function updateTimers() {
+            const now = Math.floor(Date.now() / 1000);
+
+            timerEls.forEach(el => {
+                const startedAt = Number(el.dataset.startedAt);
+                const diff = Math.max(0, now - startedAt);
+
+                const hours = Math.floor(diff / 3600);
+                const minutes = Math.floor((diff % 3600) / 60);
+                const seconds = diff % 60;
+
+                const textEl = el.querySelector('.timer-text');
+                if (textEl) {
+                    textEl.textContent = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+                }
+            });
+        }
+
+        updateTimers();
+        setInterval(updateTimers, 1000);
+    });
+    </script>
+
+    {{-- Node.js grafovi --}}
     <script>
     document.addEventListener('DOMContentLoaded', async () => {
         const genreCtx = document.getElementById('genreChart');

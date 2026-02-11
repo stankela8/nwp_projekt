@@ -28,5 +28,27 @@ class Game extends Model
     {
         return $this->hasMany(PlaySession::class);
     }
+
+    public function activeSession()
+{
+    return $this->hasOne(ActiveSession::class);
+}
+
+public function goals()
+{
+    return $this->hasMany(Goal::class);
+}
+
+public function gameHoursGoal()
+{
+    return $this->hasOne(Goal::class)->where('type', 'game_hours');
+}
+
+public function rankGoal()
+{
+    return $this->hasOne(Goal::class)->where('type', 'rank');
+}
+
+
 }
 

@@ -5,6 +5,7 @@ use App\Http\Controllers\GameController;
 use App\Http\Controllers\PlaySessionController;
 use App\Models\Game;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ActiveSessionController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -46,6 +47,11 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/games/{game}/sessions', [PlaySessionController::class, 'indexForGame'])
         ->name('games.sessions.index');
+        Route::post('/games/{game}/sessions/start', [ActiveSessionController::class, 'start'])
+    ->name('games.sessions.start');
+
+Route::post('/games/{game}/sessions/stop', [ActiveSessionController::class, 'stop'])
+    ->name('games.sessions.stop');
 });
 
 require __DIR__.'/auth.php';
