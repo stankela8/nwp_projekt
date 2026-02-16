@@ -14,102 +14,114 @@ class GameController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
-    {
-        $user = Auth::user();
+    public function index(Request $request)
+{
+    $user = Auth::user();
 
-        $games = $user->games()
-            ->withSum('playSessions as total_minutes', 'duration_minutes')
-            ->with([
-                // zadnja sesija za prikaz "Last session"
-                'playSessions' => function ($q) {
-                    $q->orderByDesc('played_at')->limit(1);
-                },
-                // aktivna live sesija za ovog usera
-                'activeSession' => function ($q) use ($user) {
-                    $q->where('user_id', $user->id);
-                },
-            ])
-            ->orderBy('title')
-            ->get();
+    // sort: 'name' (default) ili 'time'
+    $sort = $request->get('sort', 'name');
 
-        $totalGames = $games->count();
-
-        $totalMinutes = $games->sum(function ($game) {
-            return $game->total_minutes ?? 0;
-        });
-
-        $topGame = $games
-            ->sortByDesc(function ($game) {
-                return $game->total_minutes ?? 0;
-            })
-            ->first();
-
-        $from = Carbon::now()->subDays(30);
-
-        $recentSessions = PlaySession::where('user_id', $user->id)
-            ->where('played_at', '>=', $from)
-            ->with('game')
-            ->get();
-
-        $recentMinutes = $recentSessions->sum('duration_minutes');
-        $recentCount   = $recentSessions->count();
-
-        $topRecentGame = $recentSessions
-            ->groupBy('game_id')
-            ->map(function ($sessions) {
-                return [
-                    'game'    => $sessions->first()->game,
-                    'minutes' => $sessions->sum('duration_minutes'),
-                ];
-            })
-            ->sortByDesc('minutes')
-            ->first();
-
-        // goals po igri (hours + rank)
-        $hoursGoalMap = Goal::where('user_id', $user->id)
-            ->where('type', 'game_hours')
-            ->get()
-            ->groupBy('game_id');
-
-        $rankGoalMap = Goal::where('user_id', $user->id)
-            ->where('type', 'rank')
-            ->get()
-            ->groupBy('game_id');
-
-        $games->each(function ($game) use ($hoursGoalMap, $rankGoalMap) {
-            // hours goal
-            $gameGoal = optional($hoursGoalMap->get($game->id))->first();
-            if ($gameGoal) {
-                $target  = $gameGoal->target_minutes ?? 0;
-                $current = $game->total_minutes ?? 0;
-
-                $progress = $target > 0
-                    ? min(100, round($current / $target * 100))
-                    : 0;
-
-                $game->goal          = $gameGoal;
-                $game->goal_progress = $progress;
-            } else {
-                $game->goal          = null;
-                $game->goal_progress = null;
-            }
-
-            // rank goal
-            $rankGoal = optional($rankGoalMap->get($game->id))->first();
-            $game->rank_goal = $rankGoal;
-        });
-
-        return view('games.index', [
-            'games'         => $games,
-            'totalGames'    => $totalGames,
-            'totalMinutes'  => $totalMinutes,
-            'topGame'       => $topGame,
-            'recentMinutes' => $recentMinutes,
-            'recentCount'   => $recentCount,
-            'topRecentGame' => $topRecentGame,
+    $games = $user->games()
+        ->withSum('playSessions as total_minutes', 'duration_minutes')
+        ->with([
+            // zadnja sesija za prikaz "Last session"
+            'playSessions' => function ($q) {
+                $q->orderByDesc('played_at')->limit(1);
+            },
+            // aktivna live sesija za ovog usera
+            'activeSession' => function ($q) use ($user) {
+                $q->where('user_id', $user->id);
+            },
         ]);
+
+    // primijeni sortiranje
+    if ($sort === 'time') {
+        $games->orderByDesc('total_minutes');   // najviše sati prvo
+    } else {
+        $games->orderBy('title');               // abecedno
     }
+
+    $games = $games->get();
+
+    $totalGames = $games->count();
+
+    $totalMinutes = $games->sum(function ($game) {
+        return $game->total_minutes ?? 0;
+    });
+
+    $topGame = $games
+        ->sortByDesc(function ($game) {
+            return $game->total_minutes ?? 0;
+        })
+        ->first();
+
+    $from = Carbon::now()->subDays(30);
+
+    $recentSessions = PlaySession::where('user_id', $user->id)
+        ->where('played_at', '>=', $from)
+        ->with('game')
+        ->get();
+
+    $recentMinutes = $recentSessions->sum('duration_minutes');
+    $recentCount   = $recentSessions->count();
+
+    $topRecentGame = $recentSessions
+        ->groupBy('game_id')
+        ->map(function ($sessions) {
+            return [
+                'game'    => $sessions->first()->game,
+                'minutes' => $sessions->sum('duration_minutes'),
+            ];
+        })
+        ->sortByDesc('minutes')
+        ->first();
+
+    // goals po igri (hours + rank)
+    $hoursGoalMap = Goal::where('user_id', $user->id)
+        ->where('type', 'game_hours')
+        ->get()
+        ->groupBy('game_id');
+
+    $rankGoalMap = Goal::where('user_id', $user->id)
+        ->where('type', 'rank')
+        ->get()
+        ->groupBy('game_id');
+
+    $games->each(function ($game) use ($hoursGoalMap, $rankGoalMap) {
+        // hours goal
+        $gameGoal = optional($hoursGoalMap->get($game->id))->first();
+        if ($gameGoal) {
+            $target  = $gameGoal->target_minutes ?? 0;
+            $current = $game->total_minutes ?? 0;
+
+            $progress = $target > 0
+                ? min(100, round($current / $target * 100))
+                : 0;
+
+            $game->goal          = $gameGoal;
+            $game->goal_progress = $progress;
+        } else {
+            $game->goal          = null;
+            $game->goal_progress = null;
+        }
+
+        // rank goal
+        $rankGoal = optional($rankGoalMap->get($game->id))->first();
+        $game->rank_goal = $rankGoal;
+    });
+
+    return view('games.index', [
+        'games'         => $games,
+        'totalGames'    => $totalGames,
+        'totalMinutes'  => $totalMinutes,
+        'topGame'       => $topGame,
+        'recentMinutes' => $recentMinutes,
+        'recentCount'   => $recentCount,
+        'topRecentGame' => $topRecentGame,
+        'sort'          => $sort,
+    ]);
+}
+
 
     /**
      * Show the form for creating a new resource.

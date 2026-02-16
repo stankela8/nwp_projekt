@@ -19,6 +19,7 @@
     <div class="py-12 relative">
         {{-- GLAVNI KONTEJNER --}}
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+            
 
             {{-- GORNJE 3 KARTICE --}}
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:pr-80">
@@ -55,6 +56,35 @@
                     @endif
                 </div>
             </div>
+            <div class="flex items-center gap-3 mb-6">
+    <span class="text-xs font-semibold tracking-wide text-slate-500">
+        Sort by:
+    </span>
+
+    <form method="GET"
+          action="{{ route('games.index') }}"
+          class="inline-flex items-center gap-1 bg-slate-900/80 border border-slate-700 rounded-full px-1 py-1 text-xs text-slate-300">
+        <button type="submit"
+                name="sort"
+                value="time"
+                class="px-3 py-1 rounded-full transition
+                       {{ ($sort ?? 'name') === 'time'
+                            ? 'bg-slate-100 text-slate-900 font-semibold'
+                            : 'hover:bg-slate-800/80' }}">
+            Most hours
+        </button>
+
+        <button type="submit"
+                name="sort"
+                value="name"
+                class="px-3 py-1 rounded-full transition
+                       {{ ($sort ?? 'name') === 'name'
+                            ? 'bg-slate-100 text-slate-900 font-semibold'
+                            : 'hover:bg-slate-800/80' }}">
+            A–Z
+        </button>
+    </form>
+</div>
 
             {{-- TABLICA SEKCIJA --}}
             <div class="space-y-4 lg:pr-80">
